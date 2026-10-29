@@ -1,0 +1,73 @@
+# ==============================================================================
+# Prometheus Global Configuration - NetPulse
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Alertmanager Integration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # 1. Prometheus Self-Monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 2. SNMP Network Equipment Scraper (IF-MIB & System MIB)
+  - job_name: "snmp_network_switches"
+    metrics_path: /snmp
+    params:
+      module: [if_mib]
+    static_configs:
+      - targets:
+          - 192.168.10.1   # sw-core-01.corp
+          - 192.168.10.11  # sw-access-floor1.corp
+          - 192.168.10.12  # sw-access-floor2.corp
+          - 192.168.1.1    # rtr-wan-gateway.corp
+          - 192.168.20.5   # sw-dmz-leaf.corp
+        labels:
+          environment: "production"
+          site: "Datacenter-Alpha"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp-exporter:9116
+
+  # 3. ICMP Ping & Latency Telemetry (Blackbox Exporter)
+  - job_name: "icmp_ping_probes"
+    metrics_path: /probe
+    params:
+      module: [icmp_ping]
+    static_configs:
+      - targets:
+          - 192.168.10.1
+          - 192.168.10.11
+          - 192.168.1.1
+          - 8.8.8.8        # External Gateway Connectivity Test
+          - 1.1.1.1        # Secondary DNS Latency
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # 4. NetPulse Synthetic Telemetry Simulator (For Live Demos & Labs)
+  - job_name: "netpulse_simulator"
+    static_configs:
+      - targets: ["host.docker.internal:9100", "localhost:9100"]
+        labels:
+          role: "telemetry-simulator"

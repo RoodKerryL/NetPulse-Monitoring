@@ -1,0 +1,17 @@
+# Environment & Secrets
+.env
+*.env.local
+
+# Persistent container data volumes
+data/
+prometheus_data/
+grafana_data/
+alertmanager_data/
+
+# OS and Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+__pycache__/
+*.pyc

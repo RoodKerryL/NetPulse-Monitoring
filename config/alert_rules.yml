@@ -1,0 +1,61 @@
+# ==============================================================================
+# Prometheus Alerting Rules - Network Infrastructure (NetPulse)
+# ==============================================================================
+
+groups:
+  - name: network_infrastructure_alerts
+    rules:
+      # 1. Device Offline / Ping Unreachable
+      - alert: NetworkDeviceDown
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: network_availability
+        annotations:
+          summary: "Network Device Down: {{ $labels.instance }}"
+          description: "Target network appliance {{ $labels.instance }} has failed ICMP echo ping probes for > 1 minute."
+
+      # 2. High Round-Trip Latency Spike
+      - alert: HighNetworkLatency
+        expr: probe_duration_seconds > 0.08
+        for: 2m
+        labels:
+          severity: warning
+          category: network_performance
+        annotations:
+          summary: "Abnormal Network Latency: {{ $labels.instance }}"
+          description: "ICMP round-trip latency on {{ $labels.instance }} exceeds 80ms (current: {{ $value | humanizeDuration }})."
+
+      # 3. Critical Network Interface Link Down
+      - alert: CriticalInterfaceDown
+        expr: ifOperStatus{ifAlias=~".*Trunk.*|.*Uplink.*|.*Core.*"} != 1
+        for: 30s
+        labels:
+          severity: critical
+          category: link_failure
+        annotations:
+          summary: "Critical Trunk Interface Down on {{ $labels.instance }}"
+          description: "Operational status for interface {{ $labels.ifDescr }} ({{ $labels.ifAlias }}) is DOWN."
+
+      # 4. High Interface Bandwidth Saturation (>85%)
+      - alert: HighInterfaceBandwidthUtilization
+        expr: (rate(ifHCInOctets[2m]) * 8 / ifHighSpeed / 1000000) > 85
+        for: 3m
+        labels:
+          severity: warning
+          category: bandwidth_saturation
+        annotations:
+          summary: "Interface Bandwidth Saturation on {{ $labels.instance }}"
+          description: "Interface {{ $labels.ifDescr }} is exceeding 85% total link capacity for more than 3 minutes."
+
+      # 5. High CPU Utilization on Network Switch
+      - alert: HighSwitchCpuUtilization
+        expr: ciscoCpuUsage5Min > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system_resources
+        annotations:
+          summary: "High CPU on Switch {{ $labels.instance }}"
+          description: "5-minute average CPU utilization on {{ $labels.instance }} is currently {{ $value }}%."

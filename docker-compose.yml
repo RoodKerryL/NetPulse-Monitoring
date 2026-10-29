@@ -1,0 +1,104 @@
+# ==============================================================================
+# NetPulse - Enterprise Network Telemetry & Observability Stack
+# ==============================================================================
+# High-performance network monitoring architecture using Prometheus,
+# SNMP Exporter, Blackbox Exporter (ICMP/Ping), Grafana, and Alertmanager.
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # 1. Metric Scraper & Time-Series Database
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: netpulse-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - netpulse-net
+
+  # 2. SNMP Exporter (Network Switches, Routers & Firewalls)
+  snmp-exporter:
+    image: prom/snmp-exporter:v0.25.0
+    container_name: netpulse-snmp-exporter
+    restart: unless-stopped
+    volumes:
+      - ./config/snmp.yml:/etc/snmp_exporter/snmp.yml:ro
+    ports:
+      - "9116:9116"
+    networks:
+      - netpulse-net
+
+  # 3. Blackbox Exporter (ICMP Ping, Packet Loss & Latency Prober)
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.24.0
+    container_name: netpulse-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/blackbox_exporter/blackbox.yml'
+    volumes:
+      - ./config/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+    ports:
+      - "9115:9115"
+    networks:
+      - netpulse-net
+
+  # 4. Alertmanager (Event Correlation & Webhook Notification)
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: netpulse-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    networks:
+      - netpulse-net
+
+  # 5. Grafana Visualization & Modern Dark Dashboards
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: netpulse-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s:%(http_port)s/
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/network_overview.json
+    volumes:
+      - ./dashboards/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./dashboards/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./dashboards/network_overview.json:/var/lib/grafana/dashboards/network_overview.json:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - netpulse-net
+    depends_on:
+      - prometheus
+
+networks:
+  netpulse-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
